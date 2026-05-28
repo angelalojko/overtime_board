@@ -1,19 +1,28 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from .models import OvertimePost, Users, Signup
 from .serializers import OvertimePostSerializer, UserSerializer, SignupSerializer
-from rest_framework_simplejwt.tokens import RefreshToken
+
+
 
 class LoginViewSet(viewsets.ViewSet):
-    permission_classes = []  # public endpoint, no auth required
+    permission_classes = [AllowAny] 
 
     @action(detail=False, methods=['post'])
     def login(self, request):
         badge_num = request.data.get('badge_num')
         pin = request.data.get('pin')
-
+        if not badge_num or not pin:
+            return Response(
+                {'error': 'Badge number and PIN are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        
         try:
             user = Users.objects.get(badge_num=badge_num, pin=pin)
         except Users.DoesNotExist:
@@ -28,6 +37,19 @@ class LoginViewSet(viewsets.ViewSet):
             'access': str(refresh.access_token),
             'user': UserSerializer(user).data
         })
+    
+    @action(detail=False, methods=['post'])
+    def logout(self, request):
+        try:
+            refresh_token = request.data.get('refresh')
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response({'message': 'Logged out successfully'})
+        except Exception:
+            return Response(
+                {'error': 'Invalid token'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class OvertimePostViewSet(viewsets.ModelViewSet):
     queryset = OvertimePost.objects.all()
