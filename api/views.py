@@ -4,6 +4,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated
+from .permissions import IsSgtOrAbove, IsPatrolOrAbove, IsCommandStaff
 from .models import OvertimePost, Users, Signup
 from .serializers import OvertimePostSerializer, UserSerializer, SignupSerializer
 
@@ -70,6 +72,17 @@ class OvertimePostViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            # anyone logged in can view posts
+            permission_classes = [IsAuthenticated]
+        elif self.action in ['create', 'update', 'partial_update', 'destroy']:
+            # only Sgt and above can create/edit/delete posts
+            permission_classes = [IsSgtOrAbove]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
     @action(detail=True, methods=['get'])
     def signups(self, request, pk=None):
         post = self.get_object()
@@ -97,6 +110,17 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            # anyone logged in can view users
+            permission_classes = [IsAuthenticated]
+        elif self.action in ['create', 'update', 'partial_update', 'destroy']:
+            # only command staff can manage users
+            permission_classes = [IsCommandStaff]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+    
     @action(detail=True, methods=['get'])
     def signups(self, request, pk=None):
         user = self.get_object()
@@ -108,7 +132,19 @@ class UserViewSet(viewsets.ModelViewSet):
 class SignupViewSet(viewsets.ModelViewSet):
     queryset = Signup.objects.all()
     serializer_class = SignupSerializer
-
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [IsAuthenticated]
+        elif self.action == 'create':
+            # patrol can sign themselves up
+            permission_classes = [IsPatrolOrAbove]
+        elif self.action in ['update', 'partial_update', 'destroy', 'confirm', 'notify']:
+            # only Sgt and above can manage signups
+            permission_classes = [IsSgtOrAbove]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+    
     @action(detail=True, methods=['patch'])
     def confirm(self, request, pk=None):
         signup = self.get_object()
